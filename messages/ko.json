@@ -298,6 +298,7 @@
     },
     "sidebar": {
       "contactInfo": "연락처 정보",
+      "connectedWhatsApp": "연결된 WhatsApp",
       "tags": "태그",
       "notes": "메모",
       "deals": "딜",
@@ -412,6 +413,7 @@
         "delete": "삭제"
       },
       "contactInfo": "연락처 정보",
+      "connectedWhatsApp": "연결된 WhatsApp",
       "unnamed": "알 수 없음",
       "contactDetailsDesc": "연락처 정보",
       "name": "이름",

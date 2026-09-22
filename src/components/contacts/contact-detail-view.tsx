@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
+import { ConnectedWhatsAppInfo } from '@/components/whatsapp/connected-whatsapp-info';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -433,6 +434,9 @@ export function ContactDetailView({
                   </div>
                 </div>
               </div>
+              {/* Connected WhatsApp API number + its account DP — shows which
+                  connected number owns this conversation, not the customer's. */}
+              <ConnectedWhatsAppInfo label={t('connectedWhatsApp')} />
               <div className="mt-3">
                 <Button
                   size="sm"

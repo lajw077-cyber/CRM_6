@@ -133,6 +133,40 @@ export async function verifyPhoneNumber(
   return response.json()
 }
 
+export interface GetPhoneNumberPictureArgs {
+  phoneNumberId: string
+  accessToken: string
+}
+
+/**
+ * Resolve the profile picture URL of a connected WhatsApp number.
+ *
+ * Requests `redirect=0` so Meta answers with the image's public CDN URL
+ * instead of redirecting to the bytes — the returned URL is used as-is
+ * in an `<img>` on the client, so the access token never leaves the
+ * server. Returns null when Meta has no picture (or refuses the call),
+ * never throws, so the caller can degrade gracefully.
+ */
+export async function getPhoneNumberPicture(
+  args: GetPhoneNumberPictureArgs
+): Promise<{ url: string } | null> {
+  const { phoneNumberId, accessToken } = args
+  const url = `${META_API_BASE}/${phoneNumberId}/picture?redirect=0&type=large`
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!response.ok) return null
+    const data = (await response.json()) as {
+      data?: { url?: string }
+    }
+    if (!data.data?.url) return null
+    return { url: data.data.url }
+  } catch {
+    return null
+  }
+}
+
 // ============================================================
 // Cloud API registration (subscription for inbound webhooks)
 // ============================================================

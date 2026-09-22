@@ -298,6 +298,7 @@
     },
     "sidebar": {
       "contactInfo": "Informações do contato",
+      "connectedWhatsApp": "WhatsApp conectado",
       "tags": "Tags",
       "notes": "Notas",
       "deals": "Negócios",
@@ -412,6 +413,7 @@
         "delete": "Excluir"
       },
       "contactInfo": "Informações do contato",
+      "connectedWhatsApp": "WhatsApp conectado",
       "unnamed": "Desconhecido",
       "contactDetailsDesc": "Dados do contato",
       "name": "Nome",

@@ -7,6 +7,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import {
   hasUsableIdentity,
   identityDisplayName,
+  isBusinessScopedUserId,
   resolveInboundIdentity,
   type WaContactPayload,
   type WaIdentity,
@@ -1422,6 +1423,18 @@ async function findContactByWaUserId(
 }
 
 /**
+ * Whether an existing contact row's stored name is safe to overwrite
+ * with a real Meta-supplied label. True for blank names and for the
+ * auto-assigned `identityDisplayName` fallbacks (digits-only phone, or
+ * a BSUID). Anything else is treated as an agent-saved name and kept.
+ */
+function isPlaceholderContactName(name: string | null | undefined): boolean {
+  const trimmed = name?.trim() ?? ''
+  if (!trimmed) return true
+  return /^\d+$/.test(trimmed) || isBusinessScopedUserId(trimmed)
+}
+
+/**
  * Fields worth writing back onto a contact we just matched, given what
  * this delivery told us. Returns null when nothing changed, so the
  * common case costs no UPDATE.
@@ -1445,8 +1458,21 @@ function contactIdentityPatch(
   // for a brand-new row but would clobber an agent's hand-edited name
   // on every inbound message from a contact with no WhatsApp profile
   // name.
+  //
+  // A real Meta-supplied profile name or username is adopted only when
+  // the stored name is still a placeholder (blank, or the phone/BSUID
+  // auto-fallback from a fresh inbound delivery). An agent-saved name —
+  // e.g. "Ali Khan" — must survive the delivery, otherwise the very
+  // first broadcast reply rewrites it to the sender's WhatsApp profile
+  // name ("ABC Business") and the Inbox stops showing the saved name.
   const name = identity.name || identity.waUsername
-  if (name && name !== existing.name) patch.name = name
+  if (
+    name &&
+    name !== existing.name &&
+    isPlaceholderContactName(existing.name)
+  ) {
+    patch.name = name
+  }
 
   if (identity.waUserId && identity.waUserId !== existing.wa_user_id) {
     patch.wa_user_id = identity.waUserId

@@ -899,6 +899,39 @@ describe('inbound webhook: contact name backfill (#519 regression guard)', () =>
 
     expect(h.state.contactUpdates[0]).toMatchObject({ name: 'ada' })
   })
+
+  it('never replaces an agent-saved name with the WhatsApp profile name', async () => {
+    // Broadcast reply: Meta sends a different profile/business name, but
+    // the phone already exists in Contacts with a saved name. The saved
+    // name ("Ali Khan") must win — the Inbox shows it, not "ABC Business".
+    mockFindExistingContact.mockResolvedValue({
+      id: 'contact-1',
+      name: 'Ali Khan',
+      phone: '923001234567',
+    })
+
+    await runWebhook(
+      { ...TEXT_MESSAGE, id: 'wamid.REPLY1', from: '923001234567' },
+      [{ wa_id: '923001234567', profile: { name: 'ABC Business' } }],
+    )
+
+    expect(h.state.contactUpdates).toHaveLength(0)
+  })
+
+  it('adopts the WhatsApp profile name when the contact has no saved name', async () => {
+    mockFindExistingContact.mockResolvedValue({
+      id: 'contact-1',
+      name: '',
+      phone: '923001234567',
+    })
+
+    await runWebhook(
+      { ...TEXT_MESSAGE, id: 'wamid.REPLY2', from: '923001234567' },
+      [{ wa_id: '923001234567', profile: { name: 'ABC Business' } }],
+    )
+
+    expect(h.state.contactUpdates[0]).toMatchObject({ name: 'ABC Business' })
+  })
 })
 
 describe('template-lifecycle webhooks: WABA id is threaded to the handler (#534)', () => {

@@ -28,6 +28,7 @@ import {
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
+import { ConnectedWhatsAppInfo } from "@/components/whatsapp/connected-whatsapp-info";
 import { addContactTag, deleteContactTag } from "@/lib/contacts/tag-api";
 import { toast } from "sonner";
 
@@ -268,6 +269,10 @@ export function ContactSidebar({ contact, onTagsChange }: ContactSidebarProps) {
               </div>
             )}
           </div>
+
+          {/* Connected WhatsApp number + account DP (the number WE sent from).
+              Distinct from the customer's number above. */}
+          <ConnectedWhatsAppInfo label={tSidebar("connectedWhatsApp")} />
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />
