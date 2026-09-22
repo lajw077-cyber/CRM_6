@@ -22,6 +22,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import { isPlaceholderContactName } from '@/lib/whatsapp/wa-identity';
 import { SendMessageError } from '@/lib/whatsapp/send-message';
 import { resolveAuditUserId, ContactError } from '@/lib/api/v1/contacts';
 
@@ -91,7 +92,18 @@ export async function resolveConversationByPhone(
   const existing = await findExistingContact(db, accountId, sanitized);
   if (existing) {
     contactId = existing.id;
-    if (name && name !== existing.name) {
+    // Only adopt the caller-supplied name onto an existing contact when
+    // its stored name is still a placeholder (blank, digits-only phone,
+    // or BSUID). A name the agent saved in Contacts must survive API
+    // sends — overwriting it with a per-message `name` would hide
+    // exactly what the Inbox is meant to show (same rule as the inbound
+    // webhook's `contactIdentityPatch`). New contacts take the supplied
+    // name via the insert below.
+    if (
+      name &&
+      name !== existing.name &&
+      isPlaceholderContactName(existing.name)
+    ) {
       await db
         .from('contacts')
         .update({ name, updated_at: new Date().toISOString() })

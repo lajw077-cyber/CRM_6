@@ -84,6 +84,23 @@ export function isBusinessScopedUserId(value: string | null | undefined): boolea
   return !!value && BSUID_PATTERN.test(value.trim())
 }
 
+/**
+ * Whether a contact row's stored name is a placeholder that is safe to
+ * overwrite with a real label (from Meta, or from an API caller). True
+ * for blank names and for the auto-assigned fallbacks — a digits-only
+ * phone, or a BSUID. Anything else is treated as an agent-saved name
+ * and kept: overwriting "Ali Khan" because a delivery said the sender's
+ * WhatsApp profile is "ABC Business" makes the Inbox stop showing the
+ * name the user saved in Contacts.
+ */
+export function isPlaceholderContactName(
+  name: string | null | undefined
+): boolean {
+  const trimmed = name?.trim() ?? ''
+  if (!trimmed) return true
+  return /^\d+$/.test(trimmed) || isBusinessScopedUserId(trimmed)
+}
+
 /** Drop a leading `@` if Meta ever starts sending one. */
 function cleanUsername(value: string | undefined): string | null {
   const trimmed = value?.trim().replace(/^@/, '')

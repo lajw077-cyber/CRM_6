@@ -7,7 +7,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import {
   hasUsableIdentity,
   identityDisplayName,
-  isBusinessScopedUserId,
+  isPlaceholderContactName,
   resolveInboundIdentity,
   type WaContactPayload,
   type WaIdentity,
@@ -1420,18 +1420,6 @@ async function findContactByWaUserId(
     return null
   }
   return data ?? null
-}
-
-/**
- * Whether an existing contact row's stored name is safe to overwrite
- * with a real Meta-supplied label. True for blank names and for the
- * auto-assigned `identityDisplayName` fallbacks (digits-only phone, or
- * a BSUID). Anything else is treated as an agent-saved name and kept.
- */
-function isPlaceholderContactName(name: string | null | undefined): boolean {
-  const trimmed = name?.trim() ?? ''
-  if (!trimmed) return true
-  return /^\d+$/.test(trimmed) || isBusinessScopedUserId(trimmed)
 }
 
 /**

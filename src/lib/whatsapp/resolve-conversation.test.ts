@@ -29,11 +29,14 @@ interface Script {
   insertConversationError?: { code?: string } | null;
 }
 
-function makeDb(script: Script): SupabaseClient {
+function makeDb(script: Script): SupabaseClient & {
+  contactUpdates: Record<string, unknown>[];
+} {
   let table = '';
   let mode: 'select' | 'insert' | 'update' = 'select';
   let likeCalls = 0;
   let convLookupCalls = 0;
+  const contactUpdates: Record<string, unknown>[] = [];
 
   const builder: Record<string, unknown> = {
     select: () => builder,
@@ -41,8 +44,9 @@ function makeDb(script: Script): SupabaseClient {
       mode = 'insert';
       return builder;
     },
-    update: () => {
+    update: (payload: Record<string, unknown>) => {
       mode = 'update';
+      if (table === 'contacts') contactUpdates.push(payload);
       return builder;
     },
     eq: () => builder,
@@ -106,7 +110,10 @@ function makeDb(script: Script): SupabaseClient {
       mode = 'select';
       return builder;
     },
-  } as unknown as SupabaseClient;
+    contactUpdates,
+  } as unknown as SupabaseClient & {
+    contactUpdates: Record<string, unknown>[];
+  };
 }
 
 describe('resolveConversationByPhone', () => {
@@ -206,5 +213,30 @@ describe('resolveConversationByPhone', () => {
       contactId: 'c1',
       contactCreated: false,
     });
+  });
+
+  it('keeps an agent-saved contact name when a caller supplies a different one', async () => {
+    const db = makeDb({
+      config: { user_id: 'owner-1' },
+      contactCandidates: [
+        { id: 'c1', phone: '14155550123', name: 'Ali Khan' },
+      ],
+      existingConversation: { id: 'cv1' },
+    });
+    await resolveConversationByPhone(db, 'acct', '+14155550123', 'ABC Business');
+    expect(db.contactUpdates).toEqual([]);
+  });
+
+  it('adopts the supplied name onto an existing contact that only has a placeholder name', async () => {
+    const db = makeDb({
+      config: { user_id: 'owner-1' },
+      contactCandidates: [
+        { id: 'c1', phone: '14155550123', name: '14155550123' },
+      ],
+      existingConversation: { id: 'cv1' },
+    });
+    await resolveConversationByPhone(db, 'acct', '+14155550123', 'ABC Business');
+    expect(db.contactUpdates).toHaveLength(1);
+    expect(db.contactUpdates[0].name).toBe('ABC Business');
   });
 });
