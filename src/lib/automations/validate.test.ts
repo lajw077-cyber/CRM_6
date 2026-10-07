@@ -206,6 +206,32 @@ describe("validateStepsForActivation", () => {
       "steps[0].subject",
     ]);
   });
+
+  it("does not demand an operand for message_content conditions", () => {
+    expect(
+      validateStepsForActivation([
+        {
+          step_type: "condition",
+          step_config: {
+            subject: "message_content",
+            operand: "",
+            value: "order",
+            operator: "contains",
+          },
+        },
+      ]),
+    ).toEqual([]);
+    // ...but still requires its value, and other subjects still need one.
+    expect(
+      validateStepsForActivation([
+        {
+          step_type: "condition",
+          step_config: { subject: "message_content", operand: "", value: "" },
+        },
+        { step_type: "condition", step_config: { subject: "tag_presence" } },
+      ]).map((i) => i.path),
+    ).toEqual(["steps[0].value", "steps[1].operand"]);
+  });
 });
 
 describe("validateTriggerForActivation", () => {
