@@ -3,6 +3,7 @@ import type {
   AutomationLogStepResult,
   AutomationStep,
   AutomationTriggerType,
+  ConditionElseGuard,
   ConditionPredicate,
   ConditionStepConfig,
   KeywordMatchTriggerConfig,
@@ -309,6 +310,20 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
       if (step.step_type === 'condition') {
         const cfg = step.step_config as ConditionStepConfig
         const branch = await resolveConditionBranch(cfg, args)
+        // The OTHER branch is the "else message" a customer keeps
+        // triggering by replying with something that never matches.
+        // `else_guard` throttles it per contact (cooldown gap +
+        // lifetime cap); when the guard says no, the branch is
+        // skipped entirely — the condition still logged its choice.
+        if (branch === 'no' && args.contactId && !(await passElseGuard(cfg.else_guard, step.id, args))) {
+          results.push({
+            step_id: step.id,
+            step_type: 'condition',
+            status: 'success',
+            detail: 'branch=no skipped=else_guard',
+          })
+          continue
+        }
         results.push({
           step_id: step.id,
           step_type: 'condition',
@@ -745,6 +760,39 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
   }
 
   return true
+}
+
+/**
+ * Atomically check + record an else-branch run against the
+ * condition's `else_guard`. Returns false when the OTHER branch must
+ * be skipped (cooldown still running, or lifetime cap reached).
+ *
+ * Fails OPEN on RPC errors: if migration 048 hasn't been applied yet,
+ * an unthrottled else message is the old behaviour — blocking the
+ * branch instead would break every existing automation.
+ */
+async function passElseGuard(
+  guard: ConditionElseGuard | undefined,
+  conditionStepId: string,
+  args: ExecuteArgs,
+): Promise<boolean> {
+  const maxCount = Number(guard?.max_count ?? 0)
+  const cooldownMinutes = Number(guard?.cooldown_minutes ?? 0)
+  if (!(maxCount > 0) && !(cooldownMinutes > 0)) return true
+  if (!args.contactId) return true
+
+  const { data, error } = await supabaseAdmin().rpc('register_automation_else_guard', {
+    p_automation_id: args.automation.id,
+    p_contact_id: args.contactId,
+    p_condition_step_id: conditionStepId,
+    p_max_count: Math.trunc(maxCount),
+    p_cooldown_minutes: Math.trunc(cooldownMinutes),
+  })
+  if (error) {
+    console.error('[automations] else guard check failed:', error)
+    return true
+  }
+  return data !== false
 }
 
 /**

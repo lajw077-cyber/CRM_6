@@ -21,6 +21,9 @@ const h = vi.hoisted(() => ({
     upsertCalls: [] as { table: string; payload: unknown }[],
     logInserts: [] as Record<string, unknown>[],
     logUpdates: [] as Record<string, unknown>[],
+    rpcCalls: [] as { fn: string; args: Record<string, unknown> }[],
+    /** What register_automation_else_guard returns — false = guard blocks. */
+    elseGuardAllowed: true as boolean,
   },
 }));
 
@@ -122,7 +125,13 @@ vi.mock("./admin-client", () => {
         state.fromCalls.push(t);
         return builder(t);
       },
-      rpc: () => Promise.resolve({ error: null }),
+      rpc: (fn: string, args: Record<string, unknown>) => {
+        state.rpcCalls.push({ fn, args });
+        if (fn === "register_automation_else_guard") {
+          return Promise.resolve({ data: state.elseGuardAllowed, error: null });
+        }
+        return Promise.resolve({ error: null });
+      },
     }),
   };
 });
@@ -150,6 +159,8 @@ beforeEach(() => {
   h.state.upsertCalls = [];
   h.state.logInserts = [];
   h.state.logUpdates = [];
+  h.state.rpcCalls = [];
+  h.state.elseGuardAllowed = true;
 });
 
 describe("runAutomationsForTrigger — tenant isolation", () => {
@@ -899,3 +910,132 @@ function branchStepForOperatorTest(stepId: string, branch: string) {
     step_config: { field: "company", value: "OTHER_RAN" },
   };
 }
+
+describe("else guard — per-contact throttle on the OTHER branch", () => {
+  const COND_ID = "cond-g";
+
+  function guardedSteps(elseGuard?: Record<string, unknown>) {
+    return [
+      {
+        id: COND_ID,
+        automation_id: "a1",
+        step_type: "condition",
+        position: 0,
+        parent_step_id: null,
+        step_config: {
+          subject: "message_content",
+          value: "hello",
+          operator: "contains",
+          ...(elseGuard ? { else_guard: elseGuard } : {}),
+        },
+      },
+      {
+        id: "g-yes",
+        automation_id: "a1",
+        step_type: "update_contact_field",
+        position: 0,
+        parent_step_id: COND_ID,
+        branch: "yes",
+        step_config: { field: "company", value: "IF_RAN" },
+      },
+      {
+        id: "g-no",
+        automation_id: "a1",
+        step_type: "update_contact_field",
+        position: 0,
+        parent_step_id: COND_ID,
+        branch: "no",
+        step_config: { field: "company", value: "OTHER_RAN" },
+      },
+    ];
+  }
+
+  async function run(text: string) {
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { message_text: text },
+    });
+  }
+
+  function companyWrites(): string[] {
+    return h.state.updateCalls
+      .filter((c) => c.table === "contacts")
+      .map((c) => (c.payload as { company: string }).company);
+  }
+
+  function guardCalls() {
+    return h.state.rpcCalls.filter((c) => c.fn === "register_automation_else_guard");
+  }
+
+  function loggedDetails(): string[] {
+    return h.state.logUpdates.flatMap(
+      (u) =>
+        (u.steps_executed as { detail?: string }[] | undefined)?.map((r) => r.detail ?? "") ?? [],
+    );
+  }
+
+  it("runs the else branch and registers the guard when allowed", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = guardedSteps({ cooldown_minutes: 5, max_count: 2 });
+
+    await run("completely unrelated");
+
+    expect(companyWrites()).toEqual(["OTHER_RAN"]);
+    expect(guardCalls()).toHaveLength(1);
+    expect(guardCalls()[0].args).toMatchObject({
+      p_automation_id: "a1",
+      p_contact_id: "c1",
+      p_condition_step_id: COND_ID,
+      p_max_count: 2,
+      p_cooldown_minutes: 5,
+    });
+  });
+
+  it("skips the else branch when the guard blocks (cooldown or cap reached)", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = guardedSteps({ cooldown_minutes: 5, max_count: 2 });
+    h.state.elseGuardAllowed = false;
+
+    await run("completely unrelated");
+
+    expect(companyWrites()).toEqual([]);
+    expect(loggedDetails()).toContain("branch=no skipped=else_guard");
+  });
+
+  it("does not touch the guard when the IF branch matches", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = guardedSteps({ cooldown_minutes: 5, max_count: 2 });
+
+    await run("HELLO world");
+
+    expect(companyWrites()).toEqual(["IF_RAN"]);
+    expect(guardCalls()).toHaveLength(0);
+  });
+
+  it("leaves the else branch alone when no guard is configured", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = guardedSteps();
+
+    await run("completely unrelated");
+
+    expect(companyWrites()).toEqual(["OTHER_RAN"]);
+    expect(guardCalls()).toHaveLength(0);
+  });
+
+  it("treats a guard with both knobs at 0 as off", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = guardedSteps({ cooldown_minutes: 0, max_count: 0 });
+
+    await run("completely unrelated");
+
+    expect(companyWrites()).toEqual(["OTHER_RAN"]);
+    expect(guardCalls()).toHaveLength(0);
+  });
+});

@@ -649,6 +649,18 @@ export interface ConditionPredicate {
   operator?: ConditionMatchMode;
 }
 
+/**
+ * Per-contact throttle for a condition's OTHER (`no`) branch — the
+ * "else" message. Absent (or both knobs at 0) = no throttling.
+ * Persisted inside `step_config.else_guard` as opaque JSONB.
+ */
+export interface ConditionElseGuard {
+  /** Minimum minutes between else-branch runs for the same contact. 0 = off. */
+  cooldown_minutes?: number;
+  /** Lifetime cap of else-branch runs per contact. 0 = unlimited. */
+  max_count?: number;
+}
+
 export interface ConditionStepConfig extends ConditionPredicate {
   /**
    * Optional ordered ELSE IF predicates. Evaluated after the primary
@@ -657,6 +669,13 @@ export interface ConditionStepConfig extends ConditionPredicate {
    * legacy two-branch conditions.
    */
   else_ifs?: ConditionPredicate[];
+  /**
+   * Optional rate limit on the OTHER branch: stop the same contact
+   * from receiving the else message over and over (cooldown gap +
+   * lifetime cap). Enforced atomically by the engine via the
+   * register_automation_else_guard RPC (migration 048).
+   */
+  else_guard?: ConditionElseGuard;
 }
 
 export interface SendWebhookStepConfig {

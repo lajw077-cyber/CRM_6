@@ -232,6 +232,48 @@ describe("validateStepsForActivation", () => {
       ]).map((i) => i.path),
     ).toEqual(["steps[0].value", "steps[1].operand"]);
   });
+
+  it("validates the else_guard throttle numbers", () => {
+    const issues = validateStepsForActivation([
+      {
+        step_type: "condition",
+        step_config: {
+          subject: "tag_presence",
+          operand: "t1",
+          else_guard: { max_count: -1 },
+        },
+      },
+      {
+        step_type: "condition",
+        step_config: {
+          subject: "tag_presence",
+          operand: "t1",
+          else_guard: { cooldown_minutes: 1.5 },
+        },
+      },
+      {
+        step_type: "condition",
+        step_config: {
+          subject: "tag_presence",
+          operand: "t1",
+          else_guard: { max_count: 3, cooldown_minutes: 5 },
+        },
+      },
+      {
+        step_type: "condition",
+        step_config: {
+          subject: "tag_presence",
+          operand: "t1",
+          else_guard: "off" as unknown as Record<string, unknown>,
+        },
+      },
+    ]);
+    expect(issues.map((i) => i.path)).toEqual([
+      "steps[0].else_guard.max_count",
+      "steps[1].else_guard.cooldown_minutes",
+      "steps[3].else_guard",
+    ]);
+  });
 });
 
 describe("validateTriggerForActivation", () => {

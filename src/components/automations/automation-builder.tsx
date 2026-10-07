@@ -1685,6 +1685,48 @@ function StepEditor({
             <Plus className="h-3.5 w-3.5" />
             {t("config.addElseIf")}
           </Button>
+          <div className="mt-2 rounded-md border border-dashed border-border p-2">
+            <div className="mb-1 text-[11px] font-semibold uppercase">
+              {t("config.elseGuardLabel")}
+            </div>
+            <p className="mb-1 text-[11px] text-muted-foreground">
+              {t("config.elseGuardHint")}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <FieldBlock label={t("config.elseGuardCooldown")}>
+                <Input
+                  type="number"
+                  min={0}
+                  value={(cfg.else_guard as { cooldown_minutes?: number } | undefined)?.cooldown_minutes ?? 0}
+                  onChange={(e) =>
+                    set({
+                      else_guard: {
+                        ...(cfg.else_guard as object | undefined),
+                        cooldown_minutes: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+                      },
+                    })
+                  }
+                  className="bg-muted text-foreground"
+                />
+              </FieldBlock>
+              <FieldBlock label={t("config.elseGuardMaxCount")}>
+                <Input
+                  type="number"
+                  min={0}
+                  value={(cfg.else_guard as { max_count?: number } | undefined)?.max_count ?? 0}
+                  onChange={(e) =>
+                    set({
+                      else_guard: {
+                        ...(cfg.else_guard as object | undefined),
+                        max_count: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+                      },
+                    })
+                  }
+                  className="bg-muted text-foreground"
+                />
+              </FieldBlock>
+            </div>
+          </div>
         </>
       )
     }

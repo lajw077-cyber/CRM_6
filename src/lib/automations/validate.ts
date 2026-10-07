@@ -140,6 +140,7 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
       elseIfs.forEach((ei, i) => {
         validatePredicate(ei as Record<string, unknown>, `${path}.else_ifs[${i}]`, issues)
       })
+      validateElseGuard(c.else_guard, `${path}.else_guard`, issues)
       break
     case 'send_webhook':
       if (!nonEmpty(c.url)) {
@@ -225,6 +226,31 @@ export function validateTriggerForActivation(
 
 function nonEmpty(v: unknown): boolean {
   return typeof v === 'string' && v.trim().length > 0
+}
+
+/**
+ * `else_guard` throttles the OTHER branch (cooldown_minutes gap +
+ * max_count lifetime cap per contact). Both knobs are optional and 0
+ * means "off", so only structurally bad values are rejected here —
+ * the engine treats anything it can't parse as "off".
+ */
+function validateElseGuard(guard: unknown, path: string, issues: ValidationIssue[]): void {
+  if (guard == null) return
+  if (typeof guard !== 'object' || Array.isArray(guard)) {
+    issues.push({ path, message: 'else guard must be an object' })
+    return
+  }
+  const g = guard as Record<string, unknown>
+  for (const key of ['cooldown_minutes', 'max_count'] as const) {
+    const v = g[key]
+    if (v == null) continue
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
+      issues.push({
+        path: `${path}.${key}`,
+        message: `${key === 'max_count' ? 'max count' : 'cooldown'} must be a whole number of 0 or more (0 = off)`,
+      })
+    }
+  }
 }
 
 function validatePredicate(

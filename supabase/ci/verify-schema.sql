@@ -111,6 +111,24 @@ BEGIN
       'touch_presence is not granted to authenticated — migration 046 did not apply';
   END IF;
 
+  -- Else-guard state table (048): if it's missing, the engine's RPC
+  -- fails open and the else-message rate limit silently never applies
+  -- — a green checkmark over a feature that does nothing.
+  IF to_regclass('public.automation_else_guards') IS NULL THEN
+    RAISE EXCEPTION
+      'public.automation_else_guards is missing — migration 048 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.role_routine_grants
+    WHERE routine_schema = 'public'
+      AND routine_name = 'register_automation_else_guard'
+      AND grantee = 'service_role'
+      AND privilege_type = 'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION
+      'register_automation_else_guard is not granted to service_role — migration 048 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
