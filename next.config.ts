@@ -67,7 +67,13 @@ const nextConfig: NextConfig = {
   // Emit a self-contained server bundle (.next/standalone) so the
   // Docker image can run without node_modules or the Next CLI.
   // Harmless outside Docker: `next start` keeps working as before.
-  output: "standalone",
+  //
+  // Netlify exception: the Netlify runtime (@netlify/plugin-nextjs)
+  // packs its own lambda and chokes on a prebuilt standalone folder,
+  // which surfaced as a sitewide "Page Not Found". Opting out of
+  // standalone only when deploying to Netlify keeps the Docker path
+  // working unchanged.
+  ...(process.env.NETLIFY ? { output: undefined } : { output: "standalone" }),
 
   /**
    * Cross-origin dev access (Next.js 16).

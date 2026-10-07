@@ -1,0 +1,17 @@
+# Netlify deploy config for the WACRM Next.js app.
+#
+# Netlify's Next.js runtime (@netlify/plugin-nextjs) is what turns SSR
+# pages, route handlers and middleware into serverless functions. Without
+# it (or with `output: "standalone"` left in next.config.ts) every URL
+# renders Netlify's own "Page Not Found" — see the NETLIFY branch in
+# next.config.ts for how that is handled.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
